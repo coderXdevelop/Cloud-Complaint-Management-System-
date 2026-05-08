@@ -7,13 +7,31 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 
+// Defined OUTSIDE Register so React never unmounts/remounts it on re-render
+const Field = ({ id, name, label, icon: Icon, type = 'text', placeholder, required = true, form, onChange, children }) => (
+  <div>
+    <label htmlFor={id} className="block text-sm font-medium text-gray-300 mb-1.5">{label}</label>
+    {children || (
+      <div className="relative">
+        <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          id={id} name={name} type={type} value={form[name]} onChange={onChange}
+          placeholder={placeholder}
+          className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+          required={required}
+        />
+      </div>
+    )}
+  </div>
+);
+
 const Register = () => {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', usn: '', phone: '', semester: '' });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = e => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleSubmit = async e => {
     e.preventDefault();
@@ -34,23 +52,6 @@ const Register = () => {
     }
   };
 
-  const Field = ({ id, name, label, icon: Icon, type = 'text', placeholder, required = true, children }) => (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-300 mb-1.5">{label}</label>
-      {children || (
-        <div className="relative">
-          <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            id={id} name={name} type={type} value={form[name]} onChange={handleChange}
-            placeholder={placeholder}
-            className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-            required={required}
-          />
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-gray-900 to-violet-950 flex items-center justify-center p-4">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -70,10 +71,10 @@ const Register = () => {
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <Field id="reg-name" name="name" label="Full Name" icon={User} placeholder="John Doe" />
-              <Field id="reg-usn" name="usn" label="USN" icon={Hash} placeholder="1RV21CS001" />
+              <Field id="reg-name" name="name" label="Full Name" icon={User} placeholder="John Doe" form={form} onChange={handleChange} />
+              <Field id="reg-usn" name="usn" label="USN" icon={Hash} placeholder="1RV21CS001" form={form} onChange={handleChange} />
             </div>
-            <Field id="reg-email" name="email" label="Email Address" icon={Mail} type="email" placeholder="you@college.edu" />
+            <Field id="reg-email" name="email" label="Email Address" icon={Mail} type="email" placeholder="you@college.edu" form={form} onChange={handleChange} />
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
@@ -81,7 +82,7 @@ const Register = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input id="reg-password" name="password" type={showPass ? 'text' : 'password'} value={form.password} onChange={handleChange}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-10 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full pl-10 pr-10 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     required minLength={6} />
                   <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                     {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -94,13 +95,13 @@ const Register = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input id="reg-confirm-password" name="confirmPassword" type={showPass ? 'text' : 'password'} value={form.confirmPassword} onChange={handleChange}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     required />
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field id="reg-phone" name="phone" label="Phone (optional)" icon={Phone} placeholder="9876543210" required={false} />
+              <Field id="reg-phone" name="phone" label="Phone (optional)" icon={Phone} placeholder="9876543210" required={false} form={form} onChange={handleChange} />
               <div>
                 <label htmlFor="reg-semester" className="block text-sm font-medium text-gray-300 mb-1.5">Semester</label>
                 <div className="relative">

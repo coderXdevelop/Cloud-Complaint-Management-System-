@@ -25,9 +25,9 @@ const getStudentComplaints = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    const [complaints] = await pool.execute(
-      'SELECT * FROM complaints WHERE student_usn = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
-      [student_usn, limit, offset]
+    const [complaints] = await pool.query(
+      `SELECT * FROM complaints WHERE student_usn = ? ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      [student_usn]
     );
     const [[{ total }]] = await pool.execute(
       'SELECT COUNT(*) as total FROM complaints WHERE student_usn = ?', [student_usn]
