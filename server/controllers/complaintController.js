@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { sendComplaintStatusEmail } = require('../services/emailService');
 
 // Student creates a complaint
 const createComplaint = async (req, res, next) => {
@@ -101,6 +102,20 @@ const updateComplaintStatus = async (req, res, next) => {
     );
     const io = req.app.get('io');
     if (io) io.emit('complaintUpdated', complaint);
+
+    // Send email notification to the student
+    try {
+      const [[student]] = await pool.execute(
+        'SELECT email, name FROM users WHERE usn = ?', [complaint.student_usn]
+      );
+      if (student) {
+        sendComplaintStatusEmail(student.email, student.name, complaint.title, status, complaint.admin_note)
+          .catch(err => console.error('Email notification failed:', err));
+      }
+    } catch (emailErr) {
+      console.error('Failed to send status notification email:', emailErr);
+    }
+
     res.json({ message: 'Status updated successfully', complaint });
   } catch (err) { next(err); }
 };

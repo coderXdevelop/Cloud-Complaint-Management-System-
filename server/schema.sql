@@ -35,3 +35,15 @@ CREATE TABLE IF NOT EXISTS complaints (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (student_usn) REFERENCES users(usn) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(150) NOT NULL,
+  otp VARCHAR(10) NOT NULL,
+  purpose ENUM('registration', 'forgot_password') NOT NULL,
+  role ENUM('student', 'admin') DEFAULT 'student',
+  expires_at TIMESTAMP NOT NULL,
+  verified BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_email_purpose (email, purpose)
+);
