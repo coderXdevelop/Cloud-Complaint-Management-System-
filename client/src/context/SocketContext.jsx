@@ -8,7 +8,18 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    let socketUrl = import.meta.env.VITE_SOCKET_URL;
+    if (!socketUrl && import.meta.env.VITE_API_URL) {
+      socketUrl = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
+    }
+    if (!socketUrl) {
+      const origin = window.location.origin;
+      if (origin.includes(':5173')) {
+        socketUrl = origin.replace(':5173', ':5000');
+      } else {
+        socketUrl = origin;
+      }
+    }
     socketRef.current = io(socketUrl, { transports: ['websocket'] });
     socketRef.current.on('connect', () => setConnected(true));
     socketRef.current.on('disconnect', () => setConnected(false));
