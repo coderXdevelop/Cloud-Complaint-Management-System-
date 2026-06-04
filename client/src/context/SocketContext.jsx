@@ -8,7 +8,8 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    socketRef.current = io(socketUrl, { transports: ['websocket'] });
     socketRef.current.on('connect', () => setConnected(true));
     socketRef.current.on('disconnect', () => setConnected(false));
     return () => { socketRef.current?.disconnect(); };
