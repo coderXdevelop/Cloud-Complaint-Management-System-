@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Filter, FileText, Clock, CheckCircle2, Loader2, Image as ImageIcon, StickyNote, RefreshCw, Star } from 'lucide-react';
+import { Search, Filter, FileText, Clock, CheckCircle2, Loader2, Image as ImageIcon, StickyNote, RefreshCw, Star, Trophy } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
@@ -9,12 +9,14 @@ import ConfirmModal from '../components/ConfirmModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import api from '../services/api';
 import { formatDate } from '../utils/formatDate';
+import { useAuth } from '../context/AuthContext';
 
 const CATEGORIES = ['Infrastructure', 'Academic', 'Hostel', 'Transport', 'Library', 'Cafeteria', 'Sports', 'IT/Network', 'Administration', 'Other'];
 const STATUSES = ['Pending', 'Processing', 'Resolved'];
 
 const AdminDashboard = () => {
-  const [data, setData] = useState({ complaints: [], stats: null, pagination: { page: 1, pages: 1, total: 0 }, categoryCounts: [] });
+  const { user } = useAuth();
+  const [data, setData] = useState({ complaints: [], stats: null, pagination: { page: 1, pages: 1, total: 0 }, categoryCounts: [], leaderboard: [] });
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ search: '', status: '', category: '' });
   const [modal, setModal] = useState({ open: false, complaint: null, newStatus: '', loading: false });
@@ -22,11 +24,10 @@ const AdminDashboard = () => {
   const [imgModal, setImgModal] = useState(null);
   const [page, setPage] = useState(1);
 
-  const fetchData = useCallback(async (pg = page) => {
+  const fetchData = useCallback(async (pg = page, currentFilters = filters) => {
     setLoading(true);
     try {
-      // Build params without empty values
-      const raw = { page: pg, limit: 10, ...filters };
+      const raw = { page: pg, limit: 10, ...currentFilters };
       const clean = Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== '' && v !== null && v !== undefined));
       const params = new URLSearchParams(clean);
       const { data: res } = await api.get(`/complaints/all?${params}`);
@@ -38,7 +39,20 @@ const AdminDashboard = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  const handleSearch = (e) => { e.preventDefault(); setPage(1); fetchData(1); };
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setPage(1);
+    fetchData(1);
+  };
+
+  const handleTabChange = (statusVal) => {
+    setPage(1);
+    setFilters(prev => {
+      const updated = { ...prev, status: statusVal };
+      fetchData(1, updated);
+      return updated;
+    });
+  };
 
   const openStatusModal = (complaint, newStatus) => setModal({ open: true, complaint, newStatus, loading: false });
 
@@ -48,7 +62,7 @@ const AdminDashboard = () => {
       await api.put(`/complaints/${modal.complaint.complaint_id}/status`, { status: modal.newStatus });
       toast.success(`Status updated to ${modal.newStatus}`);
       setModal({ open: false, complaint: null, newStatus: '', loading: false });
-      fetchData();
+      fetchData(page);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Update failed');
       setModal(m => ({ ...m, loading: false }));
@@ -61,7 +75,7 @@ const AdminDashboard = () => {
       await api.put(`/complaints/${noteModal.complaint.complaint_id}/note`, { admin_note: noteModal.note });
       toast.success('Note saved successfully');
       setNoteModal({ open: false, complaint: null, note: '', loading: false });
-      fetchData();
+      fetchData(page);
     } catch {
       toast.error('Failed to save note');
       setNoteModal(m => ({ ...m, loading: false }));
@@ -73,13 +87,21 @@ const AdminDashboard = () => {
   return (
     <Layout title="Admin Dashboard">
       <div className="space-y-6 animate-slide-in">
+        {/* Welcome */}
+        <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white shadow-lg border border-indigo-800/40">
+          <h2 className="text-xl font-bold">Welcome back, {user?.name}! 👋</h2>
+          <p className="text-indigo-200 text-sm mt-1">
+            Designation: {user?.designation || 'System Admin'} · Department: <span className="font-semibold text-amber-400">{user?.department || 'Super Admin'}</span>
+          </p>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <StatCard title="Total Complaints" value={stats?.total || 0} icon={FileText} color="indigo" />
           <StatCard title="Pending" value={stats?.pending || 0} icon={Clock} color="amber" />
           <StatCard title="Processing" value={stats?.processing || 0} icon={Loader2} color="blue" />
           <StatCard title="Resolved" value={stats?.resolved || 0} icon={CheckCircle2} color="emerald" />
-          <StatCard title="Avg Rating" value={stats?.avg_rating ? `${stats.avg_rating} / 5` : 'N/A'} icon={Star} color="rose" />
+          <StatCard title="Avg Rating (You)" value={stats?.admin_avg_rating ? `${stats.admin_avg_rating} / 5` : 'N/A'} icon={Star} color="rose" />
         </div>
 
         {/* Category Breakdown */}
@@ -109,6 +131,61 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {/* Admin Performance Leaderboard */}
+        {data.leaderboard && data.leaderboard.length > 0 && (
+          <div className="card">
+            <div className="flex items-center gap-2 mb-4">
+              <Trophy className="w-5 h-5 text-amber-500" />
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Admin Performance Leaderboard</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 dark:bg-gray-800/40">
+                  <tr className="border-b border-gray-150 dark:border-gray-800">
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rank</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Name</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Department</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-center">Tickets Resolved</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-center">Avg Rating</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-center">Avg Resolution Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800/50">
+                  {data.leaderboard.map((admin, idx) => (
+                    <tr key={admin.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs font-semibold">
+                        {idx === 0 ? '🏆 1' : idx === 1 ? '🥈 2' : idx === 2 ? '🥉 3' : `${idx + 1}`}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900 dark:text-white">{admin.name}</div>
+                        <div className="text-xs text-gray-400">{admin.designation || 'Administrator'}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                        {admin.department}
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-gray-800 dark:text-gray-200">
+                        {admin.resolved_count}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {admin.avg_rating ? (
+                          <span className="text-amber-500 font-semibold flex items-center justify-center gap-0.5">
+                            ⭐ {admin.avg_rating}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 dark:text-gray-600 italic text-xs">Unrated</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs text-gray-500 dark:text-gray-400 font-medium">
+                        {admin.avg_resolution_time !== null ? `${admin.avg_resolution_time} hrs` : 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="card">
           <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
@@ -122,16 +199,17 @@ const AdminDashboard = () => {
                 className="input pl-9"
               />
             </div>
-            <select id="admin-filter-status" value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))} className="input sm:w-40">
-              <option value="">All Status</option>
-              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
             <select id="admin-filter-category" value={filters.category} onChange={e => setFilters(f => ({ ...f, category: e.target.value }))} className="input sm:w-44">
               <option value="">All Categories</option>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <button type="submit" className="btn-primary whitespace-nowrap"><Search className="w-4 h-4" /> Search</button>
-            <button type="button" onClick={() => { setFilters({ search: '', status: '', category: '' }); setPage(1); setTimeout(() => fetchData(1), 0); }} className="btn-secondary">
+            <button type="button" onClick={() => {
+              const cleared = { search: '', status: '', category: '' };
+              setFilters(cleared);
+              setPage(1);
+              fetchData(1, cleared);
+            }} className="btn-secondary">
               <RefreshCw className="w-4 h-4" />
             </button>
           </form>
@@ -139,8 +217,33 @@ const AdminDashboard = () => {
 
         {/* Complaints Table */}
         <div className="card p-0 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-            <h3 className="font-semibold text-gray-900 dark:text-white">All Complaints ({pagination.total})</h3>
+          {/* Status Tabs */}
+          <div className="flex border-b border-gray-150 dark:border-gray-800 overflow-x-auto no-scrollbar">
+            {[
+              { id: '', label: 'All', count: stats?.total || 0 },
+              { id: 'Pending', label: 'Pending', count: stats?.pending || 0 },
+              { id: 'Processing', label: 'Processing', count: stats?.processing || 0 },
+              { id: 'Resolved', label: 'Resolved', count: stats?.resolved || 0 }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`flex items-center gap-2 py-4 px-6 border-b-2 font-semibold text-sm whitespace-nowrap transition-all duration-200 ${
+                  filters.status === tab.id
+                    ? 'border-indigo-600 dark:border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                {tab.label}
+                <span className={`text-xs px-2 py-0.5 rounded-full transition-all duration-200 ${
+                  filters.status === tab.id
+                    ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-450'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
           </div>
 
           {loading ? (
@@ -182,7 +285,25 @@ const AdminDashboard = () => {
                         )}
                       </td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.category}</td>
-                      <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1.5 justify-center items-start">
+                          <StatusBadge status={c.status} />
+                          {c.status !== 'Resolved' && c.sla_deadline && (
+                            (() => {
+                              const isEscalated = new Date(c.sla_deadline) < new Date();
+                              return isEscalated ? (
+                                <span className="text-[9px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-900/40 text-center animate-pulse">
+                                  Escalated
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 rounded border border-gray-100 dark:border-gray-700 text-center whitespace-nowrap">
+                                  SLA: {new Date(c.sla_deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              );
+                            })()
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{formatDate(c.created_at)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5 flex-wrap">

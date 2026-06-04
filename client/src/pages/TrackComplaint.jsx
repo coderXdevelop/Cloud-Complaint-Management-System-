@@ -20,6 +20,8 @@ const TrackComplaint = () => {
   const [feedbackInput, setFeedbackInput] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [hoverRating, setHoverRating] = useState(0);
+  const [activeTab, setActiveTab] = useState('All');
+  const [stats, setStats] = useState(null);
 
   const handleFeedbackSubmit = async (e, complaintId) => {
     e.preventDefault();
@@ -38,6 +40,7 @@ const TrackComplaint = () => {
       setComplaints(prev => prev.map(c => c.complaint_id === complaintId ? { ...c, ...data.complaint } : c));
       setRatingInput(0);
       setFeedbackInput('');
+      fetchComplaints(pagination.page, activeTab);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit feedback.');
     } finally {
@@ -45,34 +48,71 @@ const TrackComplaint = () => {
     }
   };
 
-  const fetchComplaints = async (page = 1) => {
+  const fetchComplaints = async (page = 1, tab = activeTab) => {
     setLoading(true);
     try {
-      const { data } = await api.get(`/complaints/student?page=${page}&limit=8`);
+      const statusParam = tab !== 'All' ? `&status=${tab}` : '';
+      const { data } = await api.get(`/complaints/student?page=${page}&limit=8${statusParam}`);
       setComplaints(data.complaints);
       setPagination(data.pagination);
+      if (data.stats) {
+        setStats(data.stats);
+      }
     } catch { toast.error('Failed to load complaints'); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchComplaints(); }, []);
+  useEffect(() => { fetchComplaints(1, 'All'); }, []);
 
   useEffect(() => {
     if (!socket) return;
     const handler = (updated) => {
-      setComplaints(prev => prev.map(c => c.complaint_id === updated.complaint_id ? { ...c, ...updated } : c));
+      fetchComplaints(pagination.page, activeTab);
       toast.success(`Complaint #${updated.complaint_id} status updated to ${updated.status}`, { icon: '🔔' });
     };
     socket.on('complaintUpdated', handler);
     return () => socket.off('complaintUpdated', handler);
-  }, [socket]);
+  }, [socket, pagination.page, activeTab]);
 
   return (
     <Layout title="My Complaints">
       <div className="space-y-4 animate-slide-in">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Track Your Complaints</h2>
-          <span className="text-sm text-gray-500 dark:text-gray-400">{pagination.total} total</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{pagination.total} filtered / {stats?.total || 0} total</span>
+        </div>
+
+        {/* Professional Status Tabs */}
+        <div className="flex border-b border-gray-200 dark:border-gray-800 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+          {[
+            { id: 'All', label: 'All', count: stats?.total || 0 },
+            { id: 'Pending', label: 'Pending', count: stats?.pending || 0 },
+            { id: 'Processing', label: 'Processing', count: stats?.processing || 0 },
+            { id: 'Resolved', label: 'Resolved', count: stats?.resolved || 0 }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setExpanded(null);
+                fetchComplaints(1, tab.id);
+              }}
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200 ${
+                activeTab === tab.id
+                  ? 'border-indigo-600 dark:border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+            >
+              {tab.label}
+              <span className={`text-xs px-2 py-0.5 rounded-full transition-all duration-200 ${
+                activeTab === tab.id
+                  ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
 
         {loading ? (
@@ -104,6 +144,20 @@ const TrackComplaint = () => {
                       <span className="text-xs text-gray-400 flex items-center gap-1">
                         <Clock className="w-3 h-3" /> {formatDate(c.created_at)}
                       </span>
+                      {c.status !== 'Resolved' && c.sla_deadline && (
+                        (() => {
+                          const isEscalated = new Date(c.sla_deadline) < new Date();
+                          return isEscalated ? (
+                            <span className="text-[10px] px-2 py-0.5 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-semibold rounded-full border border-red-200 dark:border-red-900/50 animate-pulse">
+                              Escalated (SLA Past)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-500 dark:text-indigo-400 rounded-full border border-indigo-100 dark:border-indigo-900/30">
+                              SLA: {new Date(c.sla_deadline).toLocaleString()}
+                            </span>
+                          );
+                        })()
+                      )}
                       {c.image && (
                         <button onClick={e => { e.stopPropagation(); setImgModal(`/uploads/${c.image}`); }}
                           className="text-xs text-indigo-500 flex items-center gap-1 hover:underline">
@@ -115,15 +169,40 @@ const TrackComplaint = () => {
                 </div>
 
                 {expanded === c.complaint_id && (
-                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3 animate-fade-in">
+                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-4 animate-fade-in">
                     <div>
                       <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Description</p>
                       <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{c.description}</p>
                     </div>
+
+                    {/* Timeline Log */}
+                    {c.history_log && (
+                      <div className="border-t border-gray-100 dark:border-gray-800/80 pt-3">
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2.5">Resolution Timeline</p>
+                        <div className="space-y-3 pl-2 border-l border-gray-200 dark:border-gray-800 ml-1">
+                          {JSON.parse(c.history_log).map((h, index) => (
+                            <div key={index} className="relative pl-4">
+                              <div className="absolute -left-[13px] top-1.5 w-2 h-2 rounded-full bg-indigo-500 border border-white dark:border-gray-900" />
+                              <div className="text-xs">
+                                <span className="font-semibold text-gray-800 dark:text-gray-200">{h.event}</span>{' '}
+                                <span className="text-gray-400">by {h.actor}</span>
+                                <p className="text-gray-500 dark:text-gray-500 text-[10px] mt-0.5">{formatDate(h.timestamp)}</p>
+                                {h.note && (
+                                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/40 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
+                                    "{h.note}"
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {c.admin_note && (
                       <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl p-3">
                         <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 mb-1">
-                          <MessageSquare className="w-3 h-3" /> Admin Note
+                          <MessageSquare className="w-3 h-3" /> Latest Admin Note
                         </p>
                         <p className="text-sm text-indigo-800 dark:text-indigo-200">{c.admin_note}</p>
                       </div>
@@ -188,7 +267,7 @@ const TrackComplaint = () => {
           </div>
         )}
 
-        <Pagination page={pagination.page} pages={pagination.pages} onPageChange={fetchComplaints} />
+        <Pagination page={pagination.page} pages={pagination.pages} onPageChange={(p) => fetchComplaints(p, activeTab)} />
       </div>
 
       {/* Image Modal */}

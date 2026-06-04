@@ -23,11 +23,13 @@ const registerSendOTP = async (req, res, next) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
 
     // Check for existing user
-    const [existing] = await pool.execute(
-      'SELECT id FROM users WHERE email = ? OR usn = ?', [trimmedEmail, trimmedUSN]
-    );
-    if (existing.length > 0)
-      return res.status(409).json({ message: 'Email or USN already registered' });
+    const [existingEmail] = await pool.execute('SELECT id FROM users WHERE email = ?', [trimmedEmail]);
+    if (existingEmail.length > 0)
+      return res.status(409).json({ message: 'Email is already registered' });
+
+    const [existingUSN] = await pool.execute('SELECT id FROM users WHERE usn = ?', [trimmedUSN]);
+    if (existingUSN.length > 0)
+      return res.status(409).json({ message: 'USN is already registered' });
 
     // Generate and send OTP
     const otp = generateOTP();
@@ -83,11 +85,13 @@ const registerVerifyOTP = async (req, res, next) => {
       return res.status(400).json({ message: otpResult.message });
 
     // Double-check no duplicate was created while OTP was pending
-    const [existing] = await pool.execute(
-      'SELECT id FROM users WHERE email = ? OR usn = ?', [trimmedEmail, trimmedUSN]
-    );
-    if (existing.length > 0)
-      return res.status(409).json({ message: 'Email or USN already registered' });
+    const [existingEmail] = await pool.execute('SELECT id FROM users WHERE email = ?', [trimmedEmail]);
+    if (existingEmail.length > 0)
+      return res.status(409).json({ message: 'Email is already registered' });
+
+    const [existingUSN] = await pool.execute('SELECT id FROM users WHERE usn = ?', [trimmedUSN]);
+    if (existingUSN.length > 0)
+      return res.status(409).json({ message: 'USN is already registered' });
 
     // Create the user
     const hashed = await bcrypt.hash(password, 10);
@@ -109,11 +113,13 @@ const register = async (req, res, next) => {
     if (!name || !email || !password || !usn)
       return res.status(400).json({ message: 'Name, email, password and USN are required' });
 
-    const [existing] = await pool.execute(
-      'SELECT id FROM users WHERE email = ? OR usn = ?', [email, usn]
-    );
-    if (existing.length > 0)
-      return res.status(409).json({ message: 'Email or USN already registered' });
+    const [existingEmail] = await pool.execute('SELECT id FROM users WHERE email = ?', [email]);
+    if (existingEmail.length > 0)
+      return res.status(409).json({ message: 'Email is already registered' });
+
+    const [existingUSN] = await pool.execute('SELECT id FROM users WHERE usn = ?', [usn]);
+    if (existingUSN.length > 0)
+      return res.status(409).json({ message: 'USN is already registered' });
 
     const hashed = await bcrypt.hash(password, 10);
     await pool.execute(
@@ -168,10 +174,10 @@ const adminLogin = async (req, res, next) => {
     if (!(await bcrypt.compare(password, admin.password)))
       return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = generateToken({ id: admin.id, role: 'admin', name: admin.name });
+    const token = generateToken({ id: admin.id, role: 'admin', name: admin.name, department: admin.department });
     res.json({
       token,
-      user: { id: admin.id, name: admin.name, email: admin.email, designation: admin.designation, phone: admin.phone, role: 'admin' },
+      user: { id: admin.id, name: admin.name, email: admin.email, designation: admin.designation, phone: admin.phone, department: admin.department, role: 'admin' },
     });
   } catch (err) { next(err); }
 };
@@ -188,10 +194,14 @@ const forgotPasswordSendOTP = async (req, res, next) => {
     const userRole = role === 'admin' ? 'admin' : 'student';
     const table = userRole === 'admin' ? 'admins' : 'users';
 
+    console.log('Forgot Password Request Details:', { email, trimmedEmail, role, userRole, table });
+
     // Check if user exists
     const [rows] = await pool.execute(`SELECT id, email FROM ${table} WHERE email = ?`, [trimmedEmail]);
-    if (!rows.length)
+    if (!rows.length) {
+      console.log('Forgot Password: User not found in table', table, 'for email', trimmedEmail);
       return res.status(404).json({ message: 'No account found with this email address' });
+    }
 
     // Generate and send OTP
     const otp = generateOTP();

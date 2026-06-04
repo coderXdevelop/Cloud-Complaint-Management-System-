@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS admins (
   password VARCHAR(255) NOT NULL,
   designation VARCHAR(100),
   phone VARCHAR(15),
+  department VARCHAR(100) DEFAULT 'Super Admin',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -33,9 +34,14 @@ CREATE TABLE IF NOT EXISTS complaints (
   admin_note TEXT,
   rating INT CHECK (rating >= 1 AND rating <= 5) DEFAULT NULL,
   feedback_text TEXT DEFAULT NULL,
+  admin_id INT DEFAULT NULL,
+  sla_deadline TIMESTAMP NULL DEFAULT NULL,
+  resolved_at TIMESTAMP NULL DEFAULT NULL,
+  history_log TEXT DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (student_usn) REFERENCES users(usn) ON DELETE CASCADE
+  FOREIGN KEY (student_usn) REFERENCES users(usn) ON DELETE CASCADE,
+  FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS otp_codes (
