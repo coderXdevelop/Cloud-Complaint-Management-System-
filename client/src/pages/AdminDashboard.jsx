@@ -322,7 +322,7 @@ const AdminDashboard = () => {
                             <StickyNote className="w-3.5 h-3.5" />
                           </button>
                           {c.image && (
-                            <button onClick={() => setImgModal(`/uploads/${c.image}`)}
+                            <button onClick={() => setImgModal(c.image.startsWith('http') ? c.image : `/uploads/${c.image}`)}
                               className="p-1.5 rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all" title="View image">
                               <ImageIcon className="w-3.5 h-3.5" />
                             </button>

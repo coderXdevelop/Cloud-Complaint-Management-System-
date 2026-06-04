@@ -40,7 +40,7 @@ const createComplaint = async (req, res, next) => {
     if (!title || !category || !description)
       return res.status(400).json({ message: 'Title, category, and description are required' });
 
-    const image = req.file ? req.file.filename : null;
+    const image = req.file ? (req.file.path && req.file.path.startsWith('http') ? req.file.path : req.file.filename) : null;
     
     // Calculate SLA deadline
     const hours = SLA_HOURS[category] || 48;

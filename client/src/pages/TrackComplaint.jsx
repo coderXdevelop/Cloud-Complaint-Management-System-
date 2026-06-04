@@ -159,7 +159,7 @@ const TrackComplaint = () => {
                         })()
                       )}
                       {c.image && (
-                        <button onClick={e => { e.stopPropagation(); setImgModal(`/uploads/${c.image}`); }}
+                        <button onClick={e => { e.stopPropagation(); setImgModal(c.image.startsWith('http') ? c.image : `/uploads/${c.image}`); }}
                           className="text-xs text-indigo-500 flex items-center gap-1 hover:underline">
                           <ImageIcon className="w-3 h-3" /> View Image
                         </button>
