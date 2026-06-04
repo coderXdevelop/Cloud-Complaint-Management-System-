@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Filter, FileText, Clock, CheckCircle2, Loader2, Image as ImageIcon, StickyNote, RefreshCw } from 'lucide-react';
+import { Search, Filter, FileText, Clock, CheckCircle2, Loader2, Image as ImageIcon, StickyNote, RefreshCw, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
@@ -14,7 +14,7 @@ const CATEGORIES = ['Infrastructure', 'Academic', 'Hostel', 'Transport', 'Librar
 const STATUSES = ['Pending', 'Processing', 'Resolved'];
 
 const AdminDashboard = () => {
-  const [data, setData] = useState({ complaints: [], stats: null, pagination: { page: 1, pages: 1, total: 0 } });
+  const [data, setData] = useState({ complaints: [], stats: null, pagination: { page: 1, pages: 1, total: 0 }, categoryCounts: [] });
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ search: '', status: '', category: '' });
   const [modal, setModal] = useState({ open: false, complaint: null, newStatus: '', loading: false });
@@ -68,18 +68,46 @@ const AdminDashboard = () => {
     }
   };
 
-  const { stats, complaints, pagination } = data;
+  const { stats, complaints, pagination, categoryCounts } = data;
 
   return (
     <Layout title="Admin Dashboard">
       <div className="space-y-6 animate-slide-in">
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <StatCard title="Total Complaints" value={stats?.total || 0} icon={FileText} color="indigo" />
           <StatCard title="Pending" value={stats?.pending || 0} icon={Clock} color="amber" />
           <StatCard title="Processing" value={stats?.processing || 0} icon={Loader2} color="blue" />
           <StatCard title="Resolved" value={stats?.resolved || 0} icon={CheckCircle2} color="emerald" />
+          <StatCard title="Avg Rating" value={stats?.avg_rating ? `${stats.avg_rating} / 5` : 'N/A'} icon={Star} color="rose" />
         </div>
+
+        {/* Category Breakdown */}
+        {categoryCounts && categoryCounts.length > 0 && (
+          <div className="card">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Category Breakdown</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+              {categoryCounts.map(({ category, count }) => {
+                const maxCount = Math.max(...categoryCounts.map(item => item.count)) || 1;
+                const percentage = (count / maxCount) * 100;
+                return (
+                  <div key={category} className="space-y-1">
+                    <div className="flex justify-between text-xs font-medium text-gray-500 dark:text-gray-400">
+                      <span>{category}</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">{count} complaints</span>
+                    </div>
+                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-indigo-500 to-violet-600 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="card">
@@ -140,6 +168,18 @@ const AdminDashboard = () => {
                       <td className="px-4 py-3 max-w-[180px]">
                         <div className="font-medium text-gray-800 dark:text-gray-200 truncate">{c.title}</div>
                         {c.admin_note && <div className="text-xs text-indigo-500 truncate mt-0.5">Note: {c.admin_note}</div>}
+                        {c.rating !== null && c.rating !== undefined && (
+                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-semibold text-amber-500 flex items-center gap-0.5 whitespace-nowrap">
+                              ⭐ {c.rating}/5
+                            </span>
+                            {c.feedback_text && (
+                              <span className="text-xs text-gray-400 dark:text-gray-500 truncate italic max-w-[120px]" title={c.feedback_text}>
+                                - "{c.feedback_text}"
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{c.category}</td>
                       <td className="px-4 py-3"><StatusBadge status={c.status} /></td>

@@ -77,10 +77,19 @@ const getAllComplaints = async (req, res, next) => {
       `SELECT COUNT(*) as total,
         SUM(status='Pending') as pending,
         SUM(status='Processing') as processing,
-        SUM(status='Resolved') as resolved
+        SUM(status='Resolved') as resolved,
+        ROUND(AVG(rating), 1) as avg_rating
        FROM complaints`
     );
-    res.json({ complaints, pagination: { page, limit, total: Number(total), pages: Math.ceil(total / limit) }, stats });
+    const [categoryCounts] = await pool.execute(
+      `SELECT category, COUNT(*) as count FROM complaints GROUP BY category`
+    );
+    res.json({
+      complaints,
+      pagination: { page, limit, total: Number(total), pages: Math.ceil(total / limit) },
+      stats,
+      categoryCounts
+    });
   } catch (err) { next(err); }
 };
 
@@ -139,4 +148,52 @@ const updateComplaintNote = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { createComplaint, getStudentComplaints, getAllComplaints, updateComplaintStatus, updateComplaintNote };
+// Student submits feedback/rating for a resolved complaint
+const submitFeedback = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { rating, feedback_text } = req.body;
+    const student_usn = req.user.usn;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: 'Rating must be an integer between 1 and 5' });
+    }
+
+    // Check if complaint exists, is resolved, and belongs to the student
+    const [[complaint]] = await pool.execute(
+      'SELECT * FROM complaints WHERE complaint_id = ? AND student_usn = ?',
+      [id, student_usn]
+    );
+
+    if (!complaint) {
+      return res.status(404).json({ message: 'Complaint not found' });
+    }
+
+    if (complaint.status !== 'Resolved') {
+      return res.status(400).json({ message: 'You can only leave feedback on resolved complaints' });
+    }
+
+    await pool.execute(
+      'UPDATE complaints SET rating = ?, feedback_text = ? WHERE complaint_id = ?',
+      [rating, feedback_text || null, id]
+    );
+
+    const [[updatedComplaint]] = await pool.execute(
+      'SELECT * FROM complaints WHERE complaint_id = ?', [id]
+    );
+
+    const io = req.app.get('io');
+    if (io) io.emit('complaintUpdated', updatedComplaint);
+
+    res.json({ message: 'Feedback submitted successfully', complaint: updatedComplaint });
+  } catch (err) { next(err); }
+};
+
+module.exports = {
+  createComplaint,
+  getStudentComplaints,
+  getAllComplaints,
+  updateComplaintStatus,
+  updateComplaintNote,
+  submitFeedback
+};

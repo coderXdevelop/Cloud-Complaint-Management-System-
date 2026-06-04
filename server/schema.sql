@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS complaints (
   image VARCHAR(255),
   status ENUM('Pending','Processing','Resolved') DEFAULT 'Pending',
   admin_note TEXT,
+  rating INT CHECK (rating >= 1 AND rating <= 5) DEFAULT NULL,
+  feedback_text TEXT DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (student_usn) REFERENCES users(usn) ON DELETE CASCADE

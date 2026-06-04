@@ -6,6 +6,7 @@ const upload = require('../middleware/upload');
 const {
   createComplaint, getStudentComplaints,
   getAllComplaints, updateComplaintStatus, updateComplaintNote,
+  submitFeedback
 } = require('../controllers/complaintController');
 
 router.post('/', authenticate, isStudent, upload.single('image'), createComplaint);
@@ -13,5 +14,6 @@ router.get('/student', authenticate, isStudent, getStudentComplaints);
 router.get('/all', authenticate, isAdmin, getAllComplaints);
 router.put('/:id/status', authenticate, isAdmin, updateComplaintStatus);
 router.put('/:id/note', authenticate, isAdmin, updateComplaintNote);
+router.put('/:id/feedback', authenticate, isStudent, submitFeedback);
 
 module.exports = router;

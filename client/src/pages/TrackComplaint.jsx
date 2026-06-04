@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Clock, CheckCircle2, Loader2, MessageSquare, Image as ImageIcon } from 'lucide-react';
+import { FileText, Clock, CheckCircle2, Loader2, MessageSquare, Image as ImageIcon, Star } from 'lucide-react';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import Pagination from '../components/Pagination';
@@ -16,6 +16,34 @@ const TrackComplaint = () => {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [imgModal, setImgModal] = useState(null);
+  const [ratingInput, setRatingInput] = useState(0);
+  const [feedbackInput, setFeedbackInput] = useState('');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [hoverRating, setHoverRating] = useState(0);
+
+  const handleFeedbackSubmit = async (e, complaintId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (ratingInput < 1 || ratingInput > 5) {
+      toast.error('Please select a rating between 1 and 5 stars.');
+      return;
+    }
+    setSubmittingFeedback(true);
+    try {
+      const { data } = await api.put(`/complaints/${complaintId}/feedback`, {
+        rating: ratingInput,
+        feedback_text: feedbackInput
+      });
+      toast.success('Thank you for your feedback!');
+      setComplaints(prev => prev.map(c => c.complaint_id === complaintId ? { ...c, ...data.complaint } : c));
+      setRatingInput(0);
+      setFeedbackInput('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit feedback.');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
 
   const fetchComplaints = async (page = 1) => {
     setLoading(true);
@@ -58,7 +86,12 @@ const TrackComplaint = () => {
           <div className="space-y-3">
             {complaints.map(c => (
               <div key={c.complaint_id} className="card hover:shadow-md transition-all duration-200 cursor-pointer"
-                onClick={() => setExpanded(expanded === c.complaint_id ? null : c.complaint_id)}>
+                onClick={() => {
+                  setExpanded(expanded === c.complaint_id ? null : c.complaint_id);
+                  setRatingInput(0);
+                  setFeedbackInput('');
+                  setHoverRating(0);
+                }}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -93,6 +126,59 @@ const TrackComplaint = () => {
                           <MessageSquare className="w-3 h-3" /> Admin Note
                         </p>
                         <p className="text-sm text-indigo-800 dark:text-indigo-200">{c.admin_note}</p>
+                      </div>
+                    )}
+
+                    {c.status === 'Resolved' && (
+                      <div className="border-t border-gray-100 dark:border-gray-800/80 pt-3">
+                        {c.rating !== null && c.rating !== undefined ? (
+                          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100/80 dark:border-emerald-900/40 rounded-xl p-3">
+                            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-1.5">
+                              Your Rating & Feedback
+                            </p>
+                            <div className="flex items-center gap-1 mb-1.5">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star key={star} className={`w-4 h-4 ${star <= c.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300 dark:text-gray-650'}`} />
+                              ))}
+                            </div>
+                            {c.feedback_text && (
+                              <p className="text-sm text-emerald-800 dark:text-emerald-300 italic font-medium">
+                                "{c.feedback_text}"
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-850 rounded-xl p-3.5 space-y-2.5" onClick={e => e.stopPropagation()}>
+                            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Rate the Resolution & Share Feedback</p>
+                            <div className="flex items-center gap-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  onClick={() => setRatingInput(star)}
+                                  onMouseEnter={() => setHoverRating(star)}
+                                  onMouseLeave={() => setHoverRating(0)}
+                                  className="p-0.5 transition-transform hover:scale-115"
+                                >
+                                  <Star className={`w-5 h-5 ${star <= (hoverRating || ratingInput) ? 'text-amber-400 fill-amber-400' : 'text-gray-300 dark:text-gray-650'}`} />
+                                </button>
+                              ))}
+                            </div>
+                            <textarea
+                              placeholder="Optional comments about the resolution..."
+                              value={feedbackInput}
+                              onChange={e => setFeedbackInput(e.target.value)}
+                              className="input text-xs min-h-[60px] resize-none"
+                            />
+                            <button
+                              onClick={(e) => handleFeedbackSubmit(e, c.complaint_id)}
+                              disabled={submittingFeedback || ratingInput === 0}
+                              className="btn-primary py-1.5 px-3 text-xs w-full sm:w-auto"
+                            >
+                              {submittingFeedback ? 'Submitting...' : 'Submit Feedback'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

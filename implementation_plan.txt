@@ -1,0 +1,137 @@
+# Implementation Plan — Feature Additions & Online Hosting Guide
+
+This plan outlines the design and implementation of two high-impact features:
+1. **Feedback & Rating System**: Allowing students to rate and review resolved complaints, which are then displayed to the admin.
+2. **Category & Rating Analytics Dashboard**: Adding interactive CSS/SVG-based visualization widgets (ratings average, category breakdowns) on the Admin Dashboard.
+
+It also includes a comprehensive, step-by-step **Online Hosting Guide** to deploy the database, backend, and frontend.
+
+---
+
+## Proposed Changes
+
+We will introduce a feedback/rating system. Instead of creating a new database table and performing complex joins, we will extend the existing `complaints` table with two nullable columns:
+- `rating`: An integer representing a rating from 1 to 5.
+- `feedback_text`: A text field containing the student's optional comment.
+
+To ensure zero-setup and self-healing deployment, the backend will automatically check for these columns at startup and run migrations if they are missing.
+
+### 1. Database Schema
+
+#### [MODIFY] [schema.sql](file:///c:/Users/Nanda/Cloud-Complaint-Management/server/schema.sql)
+- Add `rating INT CHECK (rating BETWEEN 1 AND 5) DEFAULT NULL` and `feedback_text TEXT DEFAULT NULL` to the `complaints` table definition.
+
+### 2. Backend Config & Migration
+
+#### [MODIFY] [db.js](file:///c:/Users/Nanda/Cloud-Complaint-Management/server/config/db.js)
+- Add auto-migration logic upon database connection to check if `rating` and `feedback_text` exist on the `complaints` table, and run `ALTER TABLE` to add them if they are missing.
+
+### 3. Backend Routes & Controllers
+
+#### [MODIFY] [complaintController.js](file:///c:/Users/Nanda/Cloud-Complaint-Management/server/controllers/complaintController.js)
+- Implement `submitFeedback`: Students can rate and review complaints with status `Resolved` only.
+- Update `getAllComplaints`: Include `avg_rating` (average score of all rated complaints) and `category_counts` (counts of complaints grouped by category) in the admin stats response.
+
+#### [MODIFY] [complaints.js](file:///c:/Users/Nanda/Cloud-Complaint-Management/server/routes/complaints.js)
+- Register route: `PUT /api/complaints/:id/feedback` with authentication and student-only authorization.
+
+### 4. Student Frontend: Submitting Feedback
+
+#### [MODIFY] [TrackComplaint.jsx](file:///c:/Users/Nanda/Cloud-Complaint-Management/client/src/pages/TrackComplaint.jsx)
+- Enhance the expanded complaint card view.
+- If status is `Resolved` and no feedback has been submitted yet, show an interactive Star Rating (1–5 stars) select control and a text feedback field.
+- If feedback has already been submitted, display the stars and comment.
+
+### 5. Admin Frontend: Feedback and Analytics Dashboard
+
+#### [MODIFY] [AdminDashboard.jsx](file:///c:/Users/Nanda/Cloud-Complaint-Management/client/src/pages/AdminDashboard.jsx)
+- Show rating star counts and comments inside the admin complaints table/details if submitted.
+- Add an average rating card to the top stats panel.
+- Implement a custom, beautiful CSS-based horizontal bar chart displaying category breakdowns (e.g. Infrastructure, Academic, IT/Network, etc.) below the statistics cards.
+
+---
+
+## Online Hosting Guide
+
+Here is a step-by-step guide to hosting this full-stack application (MySQL, Node.js/Express, React/Vite/Socket.io) online for free or low-cost.
+
+### Phase 1: Hosting the MySQL Database
+
+You can host a cloud MySQL database using **Railway.app** or **Aiven.io** (both offer free tiers/trials).
+
+#### Option A: Railway (Recommended for ease of use)
+1. Sign up on [Railway.app](https://railway.app/).
+2. Click **New Project** → **Provision MySQL**.
+3. Railway will spin up a database and provide a connection string.
+4. Go to **Variables** to find:
+   - `MYSQLHOST` (DB_HOST)
+   - `MYSQLUSER` (DB_USER)
+   - `MYSQLPASSWORD` (DB_PASS)
+   - `MYSQLPORT` (DB_PORT)
+   - `MYSQLDATABASE` (DB_NAME)
+5. To import your schema, run the following from your local terminal (replacing placeholders with credentials from Railway):
+   ```bash
+   mysql -h <host> -u <user> -p<password> -P <port> <database_name> < server/schema.sql
+   ```
+
+---
+
+### Phase 2: Deploying the Backend (Express.js + Socket.IO)
+
+You can host the Express.js backend on **Render.com** or **Railway.app** as a Web Service.
+
+#### Deploying on Render (Free tier available)
+1. Push your project repository to GitHub.
+2. Sign in to [Render.com](https://render.com/).
+3. Click **New +** → **Web Service**.
+4. Connect your GitHub repository.
+5. Configure the service settings:
+   - **Name**: `campus-complaint-backend`
+   - **Root Directory**: `server`
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install`
+   - **Start Command**: `node index.js`
+6. Add the following **Environment Variables** in Render under settings:
+   - `PORT`: `10000` (Render's default)
+   - `DB_HOST`: *Your cloud database host*
+   - `DB_USER`: *Your cloud database user*
+   - `DB_PASS`: *Your cloud database password*
+   - `DB_NAME`: *Your cloud database name*
+   - `JWT_SECRET`: *A secure random string*
+   - `JWT_EXPIRES_IN`: `7d`
+   - `CLIENT_ORIGIN`: *Your deployed frontend URL (e.g., https://your-app.vercel.app)*
+7. Click **Deploy Web Service**. Once built, copy the backend URL (e.g., `https://campus-complaint-backend.onrender.com`).
+
+---
+
+### Phase 3: Deploying the Frontend (React + Vite)
+
+You can host the React frontend on **Vercel** or **Netlify** for free.
+
+#### Deploying on Vercel
+1. Sign up on [Vercel](https://vercel.com/) and connect your GitHub account.
+2. Click **Add New** → **Project**.
+3. Select your repository.
+4. Configure Vercel project settings:
+   - **Framework Preset**: `Vite`
+   - **Root Directory**: `client`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+5. In **Environment Variables**, add the API endpoint configuration (Vite requires configuration in production to point directly to the backend instead of the local proxy):
+   - Modify `client/src/services/api.js` to dynamically use the backend URL in production (e.g., `import.meta.env.VITE_API_BASE_URL` or fallback).
+   - Add variable: `VITE_API_BASE_URL` = `https://campus-complaint-backend.onrender.com`
+6. Click **Deploy**. Vercel will provide your live URL.
+7. **Important**: Go back to your backend (Render/Railway) environment variables and update `CLIENT_ORIGIN` to match your Vercel URL, then redeploy the backend.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+We will verify that:
+- The database connection starts up correctly and automatically modifies the table schema.
+- The new endpoints (`PUT /api/complaints/:id/feedback`) return appropriate validations (e.g., cannot rate un-resolved complaints, rating must be between 1 and 5).
+
+### Manual Verification
+- **Student Dashboard**: Submit a complaint → Admin sets it to Resolved → Student dashboard refreshes → Student rates the resolution → Student views submitted rating.
+- **Admin Dashboard**: Open dashboard → View rating average on top card → View visual category breakdown bar graph → View rating stars and comments in the table.
